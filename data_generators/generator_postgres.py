@@ -44,6 +44,15 @@ def generate_investor_account_data(conn, cursor):
         print("Exception occurred while generating investor & account data")
 
 
+def generate_master_stock_data(conn, cursor):
+    path = "files/for_tnxs/"
+    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    for file in files:
+        ticker = file[:-4]
+        cursor.execute("INSERT INTO portfolio.stock_master (ticker, description, exchange) VALUES (%s, %s, %s)", (ticker, f"This is a description for stock {ticker}", "NSE"))
+        conn.commit()
+
+
 def generate_trading_data(accountNo, conn, cursor):
     path = "files/for_tnxs/"
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
@@ -51,7 +60,6 @@ def generate_trading_data(accountNo, conn, cursor):
         df = pd.read_csv(path + file)
         ticker = file[:-4]
         count = 0
-
         for i, row in df.iterrows():
             chance = 5
             try:
@@ -82,18 +90,35 @@ def generate_trading_data(accountNo, conn, cursor):
         if count > 0:
             conn.commit()
 
+def delete_existingdata(conn, cursor):
+    try:
+        for table in ['portfolio.securitylot', 'portfolio.account', 'portfolio.investor', 'portfolio.stock_master']:
+            cursor.execute(f"SELECT EXISTS (SELECT 1 FROM {table} LIMIT 1);")
+            exists = cursor.fetchone()[0]
+            if exists:
+                print(f"🔴 Deleting data from {table}")
+                cursor.execute(f"DELETE FROM {table};")
+            else:
+                print(f"✅ {table} is already empty")
+    except Exception as inst:
+        print(type(inst))
+        print(inst)
+        raise Exception('Exception occurred while deleting data.')
+
 
 if __name__ == '__main__':
     with psycopg2.connect(
-        dbname=os.getenv('DB_NAME', 'your_db'),
-        user=os.getenv('DB_USER', 'your_user'),
-        password=os.getenv('DB_PASSWORD', 'your_password'),
-        host=os.getenv('DB_HOST', 'localhost'),
-        port=os.getenv('DB_PORT', '5432')
+        dbname=os.getenv('POSTGRES_DB', 'db'),
+        user=os.getenv('POSTGRES_USER', 'user'),
+        password=os.getenv('POSTGRES_PASSWORD', 'password'),
+        host=os.getenv('POSTGRES_HOST', 'localhost'),
+        port=os.getenv('POSTGRES_PORT', '5432')
     ) as conn:
         cursor = conn.cursor()
+        delete_existingdata(conn, cursor)
         try:
             # Generate investor, account & trading data
+            generate_master_stock_data(conn, cursor)
             generate_investor_account_data(conn, cursor)
         except Exception as inst:
             print(type(inst))

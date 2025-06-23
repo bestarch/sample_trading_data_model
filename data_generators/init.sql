@@ -9,6 +9,14 @@ BEGIN
     CREATE SCHEMA portfolio;
     SET search_path TO portfolio;
 
+    CREATE TABLE stock_master (
+        ticker VARCHAR(30) PRIMARY KEY,
+        description VARCHAR(100),
+        exchange VARCHAR(10) NOT NULL,
+        stockListDate VARCHAR(30),
+        is_active SMALLINT NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1))
+    );
+
     CREATE TABLE investor (
         id VARCHAR(255) PRIMARY KEY,
         name VARCHAR(255),
@@ -39,13 +47,9 @@ BEGIN
         lotValue DECIMAL(15, 2),
         type VARCHAR(50),
         description VARCHAR(255),
-        FOREIGN KEY (accountNo) REFERENCES account(id)
+        FOREIGN KEY (accountNo) REFERENCES account(id),
+        FOREIGN KEY (ticker) REFERENCES stock_master(ticker)
     );
 
 END;
 $$;
-
-
-
-
-

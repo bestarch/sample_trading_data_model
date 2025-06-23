@@ -1,11 +1,13 @@
-version: "3.9"
 networks:
   portfolio-app:
     driver: bridge
 services:
   server:
-    image: "abhishekcoder/securities_portfolio_app:server"
+    image: "abhishekcoder/securities_portfolio_app:latest"
+    container_name: security_portfolio-server
     platform: linux/amd64
+    entrypoint: python
+    command: server.py
     env_file:
       - docker-compose-redis-variables.env
     depends_on:
@@ -20,8 +22,11 @@ services:
     restart: always
       
   price_producer:
-    image: "abhishekcoder/securities_portfolio_app:price_producer"
+    image: "abhishekcoder/securities_portfolio_app:latest"
+    container_name: security_portfolio-price_producer
     platform: linux/amd64
+    entrypoint: python
+    command: price_producer/price_producer.py
     env_file:
       - docker-compose-redis-variables.env
     depends_on:
@@ -32,6 +37,7 @@ services:
 
   deaggregator:
     image: "abhishekcoder/securities_portfolio_app:deaggregator"
+    container_name: security_portfolio-deaggregator
     platform: linux/amd64
     env_file:
       - docker-compose-redis-variables.env
@@ -43,8 +49,11 @@ services:
     restart: on-failure
 
   tnx_generator:
-    image: "abhishekcoder/securities_portfolio_app:generator"
+    image: "abhishekcoder/securities_portfolio_app:latest"
+    container_name: security_portfolio-generator_redis
     platform: linux/amd64
+    entrypoint: python
+    command: data_generators/generator_redis.py
     env_file:
       - docker-compose-redis-variables.env
     depends_on:
@@ -54,8 +63,11 @@ services:
     restart: on-failure
 
   report:
-    image: "abhishekcoder/securities_portfolio_app:report"
+    image: "abhishekcoder/securities_portfolio_app:latest"
+    container_name: security_portfolio-report
     platform: linux/amd64
+    entrypoint: python
+    command: data_generators/report.py
     env_file:
       - docker-compose-redis-variables.env
     depends_on:
@@ -66,6 +78,7 @@ services:
 
   redis:
     image: "redis/redis-stack:latest"
+    container_name: security_portfolio-redis
     env_file:
       - docker-compose-redis-variables.env
     command: /bin/sh -c "redis-stack-server --requirepass $$PASSWORD"
