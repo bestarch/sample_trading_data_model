@@ -21,6 +21,7 @@ from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import NumericFilter, Query
 import redis.commands.search.aggregation as aggregations
 import redis.commands.search.reducers as reducers
+from collections import defaultdict
 
 global app
 
@@ -85,7 +86,7 @@ def get_all_alerts():
     time1 = time.time()
     docs = r.ft("idx_trading_alerts").search(query).docs
     time2 = time.time()
-    print(f"List of alerts retrieved in {(time2 - time1):.3f} seconds")
+    logger.info(f"List of alerts retrieved in {(time2 - time1):.3f} seconds")
     results = []
     for doc in docs:
         temp = json.loads(doc.json)
@@ -106,7 +107,7 @@ def newAlert():
         "dateTime": int(time.time()),
         "active": True
     }
-    print(f"Creating {triggerType} alert for {stock} with trigger price {triggerPrice} --> {json.dumps(alert)}.")
+    logger.info(f"Creating {triggerType} alert for {stock} with trigger price {triggerPrice} --> {json.dumps(alert)}.")
     r.json().set(f'alert:rule:{stock}', "$", alert)
     # r.set("stocks_with_rules", stock)
     results, stocks = get_all_alerts()
@@ -116,7 +117,7 @@ def newAlert():
 @app.route('/deleteRule', methods=['POST'])
 def deleteRule():
     ruleId = request.form['ruleId']
-    print(f"Deleting rule having Id {ruleId}")
+    logger.info(f"Deleting rule having Id {ruleId}")
     r.delete(ruleId)
     # r.srem("stocks_with_rules", ruleId.split(":")[2])
     results, stocks = get_all_alerts()
@@ -142,7 +143,7 @@ def systemAlerts():
         results.append(doc)
 
     results = {'data': results}
-    print(results)
+    logger.info(results)
     json_data = json.dumps(results)
     return json_data
 
@@ -179,17 +180,17 @@ def tnxResults(request):
     if stock:
         qry = qry + " @ticker: {" + stock + "*}"
 
-    print("Generated query string: " + qry)
+    logger.info("Generated query string: " + qry)
     query = (Query(qry).paging(0, 100))
     time1 = time.time()
     docs = r.ft("idx_trading_security_lot").search(query).docs
     time2 = time.time()
-    print(f"List of transactions retrieved in {(time2 - time1):.3f} seconds")
+    logger.info(f"List of transactions retrieved in {(time2 - time1):.3f} seconds")
 
     result = []
     for doc in docs:
         result.append(json.loads(doc.json))
-    # print(result)
+    # logger.info(result)
     result = {'data': result}
     return result
 
@@ -203,60 +204,95 @@ def transactions():
 def accountstats():
     account = request.args.get("account")
     result = {}
+    stockDict = defaultdict(dict)
 
     ## Get the count of securities for a given account number
     ## Query used:
     ##       FT.AGGREGATE idx_trading_security_lot '@accountNo: (ACC10001)' GROUPBY 1 @ticker REDUCE SUM 1 @quantity as totalQuantity
     req = (aggregations.AggregateRequest(f"@accountNo: ({account})")
            .group_by(['@ticker'], reducers.sum('@quantity').alias('totalQuantity')))
-    res = r.ft("idx_trading_security_lot").aggregate(req).rows
+    allocated_securities = r.ft("idx_trading_security_lot").aggregate(req).rows
+    totalPortfolioValue = 0
+    for rec in allocated_securities:
+        try:
+            logger.info(f"fetching value of key price_history_ts:{rec[1]}")
+            currentTickerPrice = ts.get(f"price_history_ts:{rec[1]}")
+            logging.info(f"Value of key is {currentTickerPrice[1]}")
 
-    totalSecurityCount = []
-    for rec in res:
-        totalSecurityCount.append(rec[1] + " [" + format(int(rec[3]), ',') + "]</br>")
-    result['totalSecurityCount'] = totalSecurityCount
+            stockDict[rec[1]]['currentPrice'] = float(currentTickerPrice[1])
+            tickerValue = float(currentTickerPrice[1]) * int(rec[3])
+            formattedTickerValue = format(tickerValue, ',.2f') ## Multiple quantity by LTP to get value of stock
+            stockDict[rec[1]]['stockValue'] = formattedTickerValue
+            stockDict[rec[1]]['quantity'] = int(rec[3])
+            totalPortfolioValue += tickerValue
+        except Exception as inst:
+            logging.error(f"Exception occurred while fetching current price of {rec[1]}")
+            logging.error(inst)
 
     ## Get the count of securities upto a given time for a provided account number
     ## Query used:
     ##       FT.AGGREGATE idx_trading_security_lot '@accountNo:(ACC10001) @date: [0 1721000000]' GROUPBY 1 @ticker REDUCE SUM 1 @quantity as totalQuantity
-    ## 1721000000 --> July 15th 2024
-    req = (aggregations.AggregateRequest(f"@accountNo: ({account}) @date: [0 1721000000]")
-           .group_by(['@ticker'], reducers.sum('@quantity').alias('totalQuantity')))
-    res = r.ft("idx_trading_security_lot").aggregate(req).rows
-    totalSecurityCountByTime = []
-    for rec in res:
-        totalSecurityCountByTime.append(rec[1] + " [" + format(int(rec[3]), ',') + "]</br>")
-    result['totalSecurityCountByTime'] = totalSecurityCountByTime
+    ##
+    # 1721000000 --> July 15th 2024
+    # This code section is deprecated
+    # req = (aggregations.AggregateRequest(f"@accountNo: ({account}) @date: [0 1721000000]")
+    #        .group_by(['@ticker'], reducers.sum('@quantity').alias('totalQuantity')))
+    # res = r.ft("idx_trading_security_lot").aggregate(req).rows
+    # totalSecurityCountByTime = []
+    # for rec in res:
+    #     totalSecurityCountByTime.append(rec[1] + " [" + format(int(rec[3]), ',') + "]</br>")
+    # result['totalSecurityCountByTime'] = totalSecurityCountByTime
+
 
     ## Get the average cost of each stocks for a given account number and time-frame
-    ## Query used:
-    ##       FT.AGGREGATE idx_trading_security_lot '@accountNo:(ACC10001) @date:[0 1721000000]' groupby 1 @ticker
-    ##       reduce sum 1 @lotValue as totalLotValue reduce sum 1 @quantity as totalQuantity apply '(@totalLotValue/(@totalQuantity*100))' as avgPrice
-    req = (aggregations.AggregateRequest(f"@accountNo: ({account}) @date: [0 1721000000]")
+    ## Query:
+    ##   FT.AGGREGATE idx_trading_security_lot '@accountNo:(ACC10001) @date:[0 1721000000]' groupby 1 @ticker
+    ##   reduce sum 1 @lotValue as totalLotValue reduce sum 1 @quantity as totalQuantity apply '(@totalLotValue/(@totalQuantity*100))' as avgPrice
+    ##
+    ## Get the average cost of each stocks for a given account number
+    ## Query:
+    ##   FT.AGGREGATE idx_trading_security_lot '@accountNo:(ACC10001)' groupby 1 @ticker
+    ##   reduce sum 1 @lotValue as totalLotValue reduce sum 1 @quantity as totalQuantity apply '(@totalLotValue/(@totalQuantity*100))' as avgPrice
+    ##
+    req = (aggregations.AggregateRequest(f"@accountNo: ({account})")
            .group_by('@ticker', reducers.sum('@lotValue').alias('totalLotValue'),
                      reducers.sum('@quantity').alias('totalQuantity'))
            .apply(avgPrice="@totalLotValue/(@totalQuantity*100)"))
 
     res = r.ft("idx_trading_security_lot").aggregate(req).rows
-    avgCostPriceByTime = []
     for rec in res:
-        avgCostPriceByTime.append(rec[1] + " [INR " + format(float(rec[7]), ',.2f') + "]</br>")
-    result['avgCostPriceByTime'] = avgCostPriceByTime
+        stockDict[rec[1]]['avgCostPrice'] = format(float(rec[7]), ',.2f')
 
-    ## get the total portfolio value for a given account number
+    ## get the total portfolio value by stock for a given account number at the time of purchase
     ## Query used:
     ##       FT.AGGREGATE idx_trading_security_lot '@accountNo:(ACC1000)' groupby 1 @ticker
     ##       reduce sum 1 @lotValue as totalLotValue apply '(@totalLotValue/100)' as portfolioFolioValue
-
     req = (aggregations.AggregateRequest(f"@accountNo: ({account})")
-           .group_by([], reducers.sum('@lotValue').alias('totalLotValue'))
+           .group_by(['@ticker'], reducers.sum('@lotValue').alias('totalLotValue'))
            .apply(portfolioValue="@totalLotValue/100"))
 
     res = r.ft("idx_trading_security_lot").aggregate(req).rows
-    portfolioValue = []
     for rec in res:
-        portfolioValue.append("INR " + format(float(rec[3]), ',.2f'))
-    result['portfolioValue'] = portfolioValue
+       # portfolioValue.append("INR " + format(float(rec[3]), ',.2f'))
+       # portfolioValue.append(rec[1] + " [" + format(float(rec[5]), ',.2f') + "]")
+        stockDict[rec[1]]['totalStockCost'] = format(float(rec[5]), ',.2f')
+
+
+   ## get the total portfolio value for a given account number at the time of purchase
+   ## Query used:
+   ##       FT.AGGREGATE idx_trading_security_lot '@accountNo:(ACC1000)' groupby 0
+   ##       reduce sum 1 @lotValue as totalLotValue apply '(@totalLotValue/100)' as portfolioFolioValue
+    amountInvested = ''
+    req = (aggregations.AggregateRequest(f"@accountNo: ({account})")
+           .group_by([], reducers.sum('@lotValue').alias('totalLotValue'))
+           .apply(portfolioValue="@totalLotValue/100"))
+    res = r.ft("idx_trading_security_lot").aggregate(req).rows
+    for rec in res:
+       amountInvested = f"INR {format(float(rec[3]), ',.2f')}"
+
+    result['amountInvested'] = amountInvested
+    result['stats'] = stockDict
+    result['totalPortfolioValue'] = f"INR {format(totalPortfolioValue, ',.2f')}"
 
     data = json.dumps(result)
     return data
@@ -345,7 +381,7 @@ def candleStickChart(sock, ticker):
             if attempt >= retry_attempt:
                 start_timestamp_millis = trading_start_time
                 startTime = datetime.fromtimestamp(start_timestamp_millis/1000).strftime("%Y-%m-%d %H:%M:%S")
-                print(f"Retried for {attempt} times. Restarting the retrieval process from {startTime}")
+                logger.info(f"Retried for {attempt} times. Restarting the retrieval process from {startTime}")
                 attempt = 0
 
             time.sleep(0.5)
@@ -431,7 +467,7 @@ def notification(sock):
 
                         if 'GT_TRIGGER_PRICE' == triggerType:
                             if price > triggerPrice:
-                                print(f"price > triggerPrice --> Trigger price: {triggerPrice}, stock price: {price}")
+                                logger.info(f"price > triggerPrice --> Trigger price: {triggerPrice}, stock price: {price}")
                                 notification = {
                                     'message': f'Stock has surpassed the trigger price of {triggerPrice}. '
                                                f'Stock price: {price}'}
@@ -439,7 +475,7 @@ def notification(sock):
 
                         elif 'LT_TRIGGER_PRICE' == triggerType:
                             if price < triggerPrice:
-                                print(f"price < triggerPrice --> Trigger price: {triggerPrice}, stock price: {price}")
+                                logger.info(f"price < triggerPrice --> Trigger price: {triggerPrice}, stock price: {price}")
                                 notification = {
                                     'message': f'Stock has fallen below the trigger price of {triggerPrice}. '
                                                f'Stock price: {price}'}
@@ -447,7 +483,7 @@ def notification(sock):
 
                         elif 'EQ_TRIGGER_PRICE' == triggerType:
                             if price == triggerPrice:
-                                print(f"price == triggerPrice --> Trigger price: {triggerPrice}, stock price: {price}")
+                                logger.info(f"price == triggerPrice --> Trigger price: {triggerPrice}, stock price: {price}")
                                 notification = {
                                     'message': f'Stock has fallen below the trigger price of {triggerPrice}. '
                                                f'Stock price: {price}'}
@@ -460,7 +496,7 @@ def notification(sock):
                 sock.send(data)
 
         except Exception as e:
-            print(f"Error: {e}")
+            logger.error(f"Error: {e}")
             break
 
 
@@ -485,7 +521,7 @@ def createIndexes():
         r.ft("idx_trading_security_lot").create_index(schema,
                                                       definition=IndexDefinition(prefix=["trading:securitylot:"],
                                                                                  index_type=IndexType.JSON))
-        print("Created index: idx_trading_security_lot")
+        logger.info("Created index: idx_trading_security_lot")
     except Exception as inst:
         logging.warning("Exception occurred while creating idx_trading_security_lot index")
 
@@ -503,7 +539,7 @@ def createIndexes():
                   TextField("$.accountOpenDate", as_name="accountOpenDate"))
         r.ft("idx_trading_account").create_index(schema, definition=IndexDefinition(prefix=["trading:account:"],
                                                                                     index_type=IndexType.JSON))
-        print("Created index: idx_trading_account")
+        logger.info("Created index: idx_trading_account")
     except Exception as inst:
         logging.warning("Exception occurred while creating idx_trading_account index")
 
@@ -521,14 +557,23 @@ def createIndexes():
                   NumericField("$.dateTime", as_name="dateTime"))
         r.ft("idx_trading_alerts").create_index(schema, definition=IndexDefinition(prefix=["alert:rule:"],
                                                                                     index_type=IndexType.JSON))
-        print("Created index: idx_trading_alerts")
+        logger.info("Created index: idx_trading_alerts")
     except Exception as inst:
         logging.warning("Exception occurred while creating idx_trading_alerts index")
 
 
 if __name__ == '__main__':
     createIndexes()
-    test_stocks = os.getenv('TEST_STOCKS', 'ABCBANK,ABCMOTORS').split(',')
+    test_stocks = []
+
+    #test_stocks = os.getenv('TEST_STOCKS', 'ABCBANK,ABCMOTORS').split(',')
+
+    path = "files/for_pricing_data/"
+    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    for file in files:
+        if file.lower().endswith('.csv'):
+            test_stocks.append(file[:-13])
+
     enabledFeatures = {
         "ticker_trend": eval(str(os.getenv('ticker_trend', True)).capitalize()),
         "report": eval(str(os.getenv('report', True)).capitalize()),

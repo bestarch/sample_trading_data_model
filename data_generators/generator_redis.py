@@ -66,54 +66,55 @@ def generate_trading_data(conn, accountNo):
     path = "files/for_tnxs/"
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     for file in files:
-        df = pd.read_csv(path + file)
-        ticker = file[:-4]
+        if file.lower().endswith('.csv'):
+            df = pd.read_csv(path + file)
+            ticker = file[:-4]
 
-        count = 0
-        pipeline = conn.pipeline()
+            count = 0
+            pipeline = conn.pipeline()
 
-        for i, row in df.iterrows():
-            chance = 5
-            try:
-                securityLotPrefix = "trading:securitylot:" + accountNo + ":"
-                buy = fake.boolean(chance_of_getting_true=chance)
-                chance = chance - 1
-                if chance < 0:
-                    chance = 5
-                if buy:
-                    dateInUnix = int(time.mktime(time.strptime(row['Date '], "%d-%b-%Y")))
-                    buyingPrice = float(str(row['OPEN ']).replace(',', '')) * 100
+            for i, row in df.iterrows():
+                chance = 3
+                try:
+                    securityLotPrefix = "trading:securitylot:" + accountNo + ":"
+                    buy = fake.boolean(chance_of_getting_true=chance)
+                    chance = chance - 1
+                    if chance < 0:
+                        chance = 3
+                    if buy:
+                        dateInUnix = int(time.mktime(time.strptime(row['Date '], "%d-%b-%Y")))
+                        buyingPrice = float(str(row['OPEN ']).replace(',', '')) * 100
 
-                    max_value = fake.pyint(min_value=1, max_value=18)
-                    quantity = fake.pyint(min_value=1, max_value=max_value)
-                    secLotId = fake.lexify("????").upper() + str(i) + str(fake.random_number(digits=8, fix_len=True))
-                    lotVal = buyingPrice * quantity
-                    desc = f"{row['Date ']}: {quantity} {ticker} stocks having unit price of INR {buyingPrice/100} credited to accountNo {accountNo}. The transaction value is INR {lotVal/100}"
+                        max_value = fake.pyint(min_value=1, max_value=18)
+                        quantity = fake.pyint(min_value=1, max_value=max_value)
+                        secLotId = fake.lexify("????").upper() + str(i) + str(fake.random_number(digits=8, fix_len=True))
+                        lotVal = buyingPrice * quantity
+                        desc = f"{row['Date ']}: {quantity} {ticker} stocks having unit price of INR {buyingPrice/100} credited to accountNo {accountNo}. The transaction value is INR {lotVal/100}"
 
-                    securityLot = {
-                        "id": secLotId,
-                        "accountNo": accountNo,
-                        "ticker": ticker,
-                        "date": dateInUnix,
-                        "price": buyingPrice,
-                        "quantity": quantity,
-                        "lotValue": lotVal,
-                        "type": "EQUITY",
-                        "desc": desc,
-                        "embeddings": False
-                    }
+                        securityLot = {
+                            "id": secLotId,
+                            "accountNo": accountNo,
+                            "ticker": ticker,
+                            "date": dateInUnix,
+                            "price": buyingPrice,
+                            "quantity": quantity,
+                            "lotValue": lotVal,
+                            "type": "EQUITY",
+                            "desc": desc,
+                            "embeddings": False
+                        }
 
-                    pipeline.json().set(securityLotPrefix + secLotId, "$", securityLot)
-                    count += 1
-                    if count >= 100:
-                        pipeline.execute()
-                        print(f"pipeline command executed for {count}")
-                        count = 0
-            except Exception as inst:
-                print(type(inst))
-                print("Exception occurred while generating trading data")
-        if count > 0:
-            pipeline.execute()
+                        pipeline.json().set(securityLotPrefix + secLotId, "$", securityLot)
+                        count += 1
+                        if count >= 100:
+                            pipeline.execute()
+                            print(f"pipeline command executed for {count}")
+                            count = 0
+                except Exception as inst:
+                    print(type(inst))
+                    print("Exception occurred while generating trading data")
+            if count > 0:
+                pipeline.execute()
 
 
 if __name__ == '__main__':

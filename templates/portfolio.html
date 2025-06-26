@@ -96,32 +96,29 @@
 
                     <div class="row" id="accDetailDiv">
 
-                        <div class="col-xl-3 col-md-3 mb-4">
-                            <div class="card border-left-primary shadow h-100 py-2">
-                                <div class="card-body">
-                                    <div class="row no-gutters align-items-center">
-                                        <div class="col mr-2">
-                                            <div class="text-xs font-weight-bold text-primary mb-1">
-                                                Number of stocks held</div>
-                                            <div class="h5 mb-0 font-weight-bold small text-gray-800" id="totalSecurityCount"></div>
-                                        </div>
-                                        <div class="col-auto">
-                                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-xl-3 col-md-3 mb-4">
+                        <div class="col-xl-8 col-md-8 mb-4">
                             <div class="card border-left-success shadow h-100 py-2">
                                 <div class="card-body">
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
-                                            <div class="text-xs font-weight-bold text-success mb-1">
-                                                Stocks as of today</div>
-                                            <div class="h5 mb-0 font-weight-bold small text-gray-800" id="totalSecurityCountByTime"></div>
-                                        </div>
+                                            <div class="text-sm font-weight-bold text-success mb-1">Stocks holding (in INR)</div>
+                                                <table class="h5 mb-0 small text-gray-800" style="font-size: 90%;">
+                                                    <thead>
+                                                        <tr class="font-weight-bold">
+                                                            <th>Stock Name</th>
+                                                            <th>&nbsp;&nbsp;</th>
+                                                            <th>Unit holding</th>
+                                                            <th>&nbsp;&nbsp;</th>
+                                                            <th>Avg. cost price</th>
+                                                            <th>&nbsp;&nbsp;</th>
+                                                            <th>Total cost</th>
+                                                            <th>&nbsp;&nbsp;</th>
+                                                            <th>Current value</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody id="stats"></tbody>
+                                                </table>
+                                            </div>
                                         <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
                                         </div>
@@ -130,42 +127,51 @@
                             </div>
                         </div>
 
-                        <div class="col-xl-3 col-md-3 mb-4">
+                        <div class="col-xl-4 col-md-4 mb-4">
                             <div class="card border-left-success shadow h-100 py-2">
                                 <div class="card-body">
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
-                                            <div class="text-xs font-weight-bold text-success mb-1">
-                                                Average cost/unit </div>
-                                            <div class="h5 mb-0 font-weight-bold small text-gray-800" id="avgCostPriceByTime"></div>
+                                            <div class="text-sm font-weight-bold text-success mb-1">Amount invested </div>
+                                            <div class="h5 mb-0 small text-gray-800" id="amountInvested" style="font-size: 90%;"></div>
                                         </div>
-                                        <div class="col-auto">
-                                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="col-xl-3 col-md-3 mb-4">
-                            <div class="card border-left-success shadow h-100 py-2">
-                                <div class="card-body">
+                                    </div>
+
                                     <div class="row no-gutters align-items-center">
                                         <div class="col mr-2">
-                                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                                Portfolio value </div>
-                                            <div class="h5 mb-0 font-weight-bold small text-gray-800" id="portfolioValue"></div>
+                                            <div class="text-xs font-weight-bold text-success mb-1">&nbsp;</div>
                                         </div>
-                                        <div class="col-auto">
+                                    </div>
+
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-sm font-weight-bold text-success mb-1">Total portfolio value </div>
+                                            <div class="h5 mb-0 small text-gray-800" id="totalPortfolioValue"></div>
+                                        </div>
+
+                                    </div>
+
+                                     <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-success mb-1">&nbsp;</div>
+                                        </div>
+                                          <div class="col-auto">
                                             <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
                                         </div>
                                     </div>
+
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col mr-2">
+                                            <div class="text-xs font-weight-bold text-success mb-1">Account# </div>
+                                            <div class="h5 mb-0 small text-gray-800" id="accountNo"></div>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
                         </div>
-
                     </div>
-
 
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">

@@ -13,10 +13,11 @@ configs = Properties()
 with open('config/app-config.properties', 'rb') as config_file:
     configs.load(config_file)
 
-def ingestionTask(stock, price_stream_name):
-    print(f"\nPricing data is getting generated for {stock}")
+def ingestionTask(path, stock_file_name, price_stream_name):
     try:
-        data = pd.read_csv("files/for_pricing_data/" + stock + "_intraday.csv")
+        stock = stock_file_name[:-13]
+        print(f"\nGenerating pricing data for {stock}")
+        data = pd.read_csv(path + stock_file_name)
         chunk = 500
         for i, row in data.iterrows():
             dateInUnix = int(time.mktime(time.strptime(row['DateTime'], configs.get("DATE_FORMAT").data)))
@@ -36,15 +37,21 @@ def ingestionTask(stock, price_stream_name):
     except Exception as inst:
         print(type(inst))
         print("Exception occurred while generating pricing data")
-        print(data)
         raise Exception('Exception occurred while generating pricing data. Delete the corrupted data and try again')
 
 
 if __name__ == '__main__':
     conn = RedisConnection().get_connection()
     price_stream_name = configs.get("PRICE_STREAM").data
-    test_stocks = os.getenv('TEST_STOCKS', 'ABCBANK,ABCMOTORS').split(',')
-    for test_stock in test_stocks:
-        stock = test_stock.strip()
-        t = threading.Thread(target=ingestionTask, args=(stock, price_stream_name))
+    file_names = []
+
+    path = "files/for_pricing_data/"
+    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    for file in files:
+        if file.lower().endswith('.csv'):
+            file_names.append(file)
+
+    for stock_file_name in file_names:
+        stock = stock_file_name.strip()
+        t = threading.Thread(target=ingestionTask, args=(path, stock_file_name, price_stream_name))
         t.start()
