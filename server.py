@@ -200,6 +200,18 @@ def transactions():
     return tnxResults(request)
 
 
+
+ '''
+    For each account no, the evaluated portfolio object looks like: 
+    stockDict['STOCK'] = 
+        {
+            'quantity' = XXX        --> Calculated at runtime aggregating across all transactions by RQE
+            'currentPrice' = XXX    --> Provided by current stock price using TS
+            'stockValue' = XXX      --> Product of stock 'quantity' and 'currentPrice'
+            'totalStockCost' = XXX  --> This is present in each transaction record which is then aggregated across all transactions by RQE
+            'avgCostPrice' = XXX    --> Calculated at runtime by RQE  
+        }
+    '''
 @app.route('/accountstats')
 def accountstats():
     account = request.args.get("account")
